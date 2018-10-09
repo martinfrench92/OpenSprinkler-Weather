@@ -1,4 +1,5 @@
 var http		= require( "http" ),
+	https		= require( "https" ),
 	SunCalc		= require( "suncalc" ),
 	moment		= require( "moment-timezone" ),
 	geoTZ	 	= require( "geo-tz" ),
@@ -76,6 +77,53 @@ function getWeatherUndergroundData( location, weatherUndergroundKey, callback ) 
 		}
 	} );
 }
+
+
+// Retrieve weather data from Dark Sky
+function getDarkSkyData( location, darkSkyKey, callback ) {
+
+	// Generate URL for Dark Sky Time Machine Request to get conditions yesterday
+	//var url = "http://api.wunderground.com/api/" + darkSkyKey +
+	//	"/yesterday/conditions/astronomy/q/" + encodeURIComponent( location ) + ".json";
+		
+	// Generate URL for Dark Sky Forecast Request to get current conditions
+	var forecastURL = "https://api.darksky.net/forecast/" + darkSkyKey + "/" +  location[ 0 ] + "," + location[ 1 ];
+
+	// Perform the HTTPs request to retrieve the forecast data
+	httpsRequest( forecastURL, function( data ) {
+		try {
+			console.log(data);
+			data = JSON.parse( data );
+
+			/*var currentPrecip = parseFloat( data.currently.precipIntensity ),
+				yesterdayPrecip = parseFloat( data.history.dailysummary[ 0 ].precipi ),
+				weather = {
+					icon:		data.current_observation.icon,
+					timezone:	data.current_observation.local_tz_offset,
+					sunrise:	parseInt( data.sun_phase.sunrise.hour ) * 60 + parseInt( data.sun_phase.sunrise.minute ),
+					sunset:		parseInt( data.sun_phase.sunset.hour ) * 60 + parseInt( data.sun_phase.sunset.minute ),
+					maxTemp:	parseInt( data.history.dailysummary[ 0 ].maxtempi ),
+					minTemp:	parseInt( data.history.dailysummary[ 0 ].mintempi ),
+					temp:		parseInt( data.current_observation.temp_f ),
+					humidity:	( parseInt( data.history.dailysummary[ 0 ].maxhumidity ) + parseInt( data.history.dailysummary[ 0 ].minhumidity ) ) / 2,
+					precip:		( currentPrecip > 0 ? currentPrecip : 0) + ( yesterdayPrecip > 0 ? yesterdayPrecip : 0),
+					solar:		parseInt( data.current_observation.UV ),
+					wind:		parseInt( data.history.dailysummary[ 0 ].meanwindspdi ),
+					elevation:	parseInt( data.current_observation.observation_location.elevation )
+				};
+			callback( weather );*/
+
+		} catch ( err ) {
+			
+			// Otherwise indicate the request failed
+			callback( false );
+			return;
+		}
+	} );
+	console.log(data);
+	return;
+}
+
 
 // Retrieve weather data from Open Weather Map
 function getOWMWeatherData( location, callback ) {
@@ -244,6 +292,7 @@ exports.getWeather = function( req, res ) {
 		// Data will be processed to retrieve the resulting scale, sunrise/sunset, timezone,
 		// and also calculate if a restriction is met to prevent watering.
 		finishRequest = function( weather ) {
+
 			if ( !weather ) {
 				if ( typeof location[ 0 ] === "number" && typeof location[ 1 ] === "number" ) {
 					getTimeData( location, finishRequest );
@@ -343,7 +392,8 @@ exports.getWeather = function( req, res ) {
 		location = [ parseFloat( location[ 0 ] ), parseFloat( location[ 1 ] ) ];
 
 		// Continue with the weather request
-		getOWMWeatherData( location, finishRequest );
+		//getOWMWeatherData( location, finishRequest );
+		getDarkSkyData( location, "936fbffed9e46f1c3689b0e2c0a2c717", finishRequest );
 	} else {
 
 		// Attempt to resolve provided location to GPS coordinates when it does not match
@@ -373,6 +423,38 @@ function httpRequest( url, callback ) {
 
 	http.get( options, function( response ) {
         var data = "";
+
+        // Reassemble the data as it comes in
+        response.on( "data", function( chunk ) {
+            data += chunk;
+        } );
+
+        // Once the data is completely received, return it to the callback
+        response.on( "end", function() {
+            callback( data );
+        } );
+	} ).on( "error", function() {
+
+		// If the HTTP request fails, return false
+		callback( false );
+	} );
+}
+
+// Generic HTTPs request handler that parses the URL and uses the
+// native Node.js http module to perform the request
+function httpsRequest( url, callback ) {
+	url = url.match( filters.url );
+
+	var options = {
+		host: url[ 1 ],
+		port: url[ 2 ] || 443,
+		path: url[ 3 ]
+	};
+
+	https.get( options, function( response ) {
+        var data = "";
+
+		response.setEncoding( 'utf8' );
 
         // Reassemble the data as it comes in
         response.on( "data", function( chunk ) {
