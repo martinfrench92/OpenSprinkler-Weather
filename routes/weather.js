@@ -82,46 +82,49 @@ function getWeatherUndergroundData( location, weatherUndergroundKey, callback ) 
 // Retrieve weather data from Dark Sky
 function getDarkSkyData( location, darkSkyKey, callback ) {
 
-	// Generate URL for Dark Sky Time Machine Request to get conditions yesterday
-	//var url = "http://api.wunderground.com/api/" + darkSkyKey +
-	//	"/yesterday/conditions/astronomy/q/" + encodeURIComponent( location ) + ".json";
-		
-	// Generate URL for Dark Sky Forecast Request to get current conditions
-	var forecastURL = "https://api.darksky.net/forecast/" + darkSkyKey + "/" +  location[ 0 ] + "," + location[ 1 ];
+	// Generate URL for Dark Sky Time Machine Request to get conditions yesterday and use forecast request for current conditions
+	var forecastURL = "https://api.darksky.net/forecast/" + darkSkyKey + "/" +  location[ 0 ] + "," + location[ 1 ] + "?exclude=hourly,daily,flags";
 
-	// Perform the HTTPs request to retrieve the forecast data
-	httpsRequest( forecastURL, function( data ) {
-		try {
-			console.log(data);
-			data = JSON.parse( data );
-
-			/*var currentPrecip = parseFloat( data.currently.precipIntensity ),
-				yesterdayPrecip = parseFloat( data.history.dailysummary[ 0 ].precipi ),
-				weather = {
-					icon:		data.current_observation.icon,
-					timezone:	data.current_observation.local_tz_offset,
-					sunrise:	parseInt( data.sun_phase.sunrise.hour ) * 60 + parseInt( data.sun_phase.sunrise.minute ),
-					sunset:		parseInt( data.sun_phase.sunset.hour ) * 60 + parseInt( data.sun_phase.sunset.minute ),
-					maxTemp:	parseInt( data.history.dailysummary[ 0 ].maxtempi ),
-					minTemp:	parseInt( data.history.dailysummary[ 0 ].mintempi ),
-					temp:		parseInt( data.current_observation.temp_f ),
-					humidity:	( parseInt( data.history.dailysummary[ 0 ].maxhumidity ) + parseInt( data.history.dailysummary[ 0 ].minhumidity ) ) / 2,
-					precip:		( currentPrecip > 0 ? currentPrecip : 0) + ( yesterdayPrecip > 0 ? yesterdayPrecip : 0),
-					solar:		parseInt( data.current_observation.UV ),
-					wind:		parseInt( data.history.dailysummary[ 0 ].meanwindspdi ),
-					elevation:	parseInt( data.current_observation.observation_location.elevation )
-				};
-			callback( weather );*/
-
-		} catch ( err ) {
+	getTimeData( location, function( weather ) {
+		// Perform the HTTPs request to retrieve the time machine data for yesterday readings
+		httpsRequest( forecastURL, function( forecastData ) {
+			try {
+				forecastData = JSON.parse( forecastData );
+			} catch ( err ) {
+				
+				// Otherwise indicate the request failed
+				callback( false );
+				return;
+			}
 			
-			// Otherwise indicate the request failed
-			callback( false );
-			return;
-		}
+			// Generate URL for Dark Sky Time Machine request to get condition yesterday
+			//		Use the time from current reading timestamp less 86400 (24hr in secs) to get yesterdays results relative to current
+			var yesterdayURL = "https://api.darksky.net/forecast/" + darkSkyKey + "/" +  location[ 0 ] + "," + location[ 1 ] + "," +
+							((forecastData.currently.time - 86400) || 0 ) + "?exclude=currently,hourly,flags";
+			
+			httpsRequest( yesterdayURL, function( yesterdayData) {
+				try {
+					yesterdayData = JSON.parse( yesterdayData );
+				} catch ( err ) {
+
+					// Otherwise indicate the request failed
+					callback( false );
+					return;			
+				}
+				
+				//Map data from yesterday and current (forecast) data queries including default values
+				weather.icon				= forecastData.currently.icon || "clear-day";
+				weather.temp				= forecastData.currently.temperature || 0;
+				weather.humidity			= yesterdayData.daily.data[0].humidity || 0;
+				weather.yesterdayPrecip 	= yesterdayData.daily.data[0].precipIntensity || 0;
+				weather.currentPrecip 		= forecastData.currently.precipIntensity || 0;
+				weather.precip				= ( weather.currentPrecip > 0 ? weather.currentPrecip : 0) + ( weather.yesterdayPrecip > 0 ? weather.yesterdayPrecip : 0);
+				weather.wind				= forecastData.currently.windSpeed || 0;
+
+				callback ( weather );
+			} );
+		} );
 	} );
-	console.log(data);
-	return;
 }
 
 
@@ -292,7 +295,6 @@ exports.getWeather = function( req, res ) {
 		// Data will be processed to retrieve the resulting scale, sunrise/sunset, timezone,
 		// and also calculate if a restriction is met to prevent watering.
 		finishRequest = function( weather ) {
-
 			if ( !weather ) {
 				if ( typeof location[ 0 ] === "number" && typeof location[ 1 ] === "number" ) {
 					getTimeData( location, finishRequest );
