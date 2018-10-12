@@ -114,12 +114,16 @@ function getDarkSkyData( location, darkSkyKey, callback ) {
 				
 				//Map data from yesterday and current (forecast) data queries including default values
 				weather.icon				= forecastData.currently.icon || "clear-day";
-				weather.temp				= forecastData.currently.temperature || 0;
-				weather.humidity			= yesterdayData.daily.data[0].humidity || 0;
-				weather.yesterdayPrecip 	= yesterdayData.daily.data[0].precipIntensity || 0;
-				weather.currentPrecip 		= forecastData.currently.precipIntensity || 0;
+				weather.maxTemp             = parseInt( yesterdayData.daily.data[0].temperatureMax );
+				weather.minTemp             = parseInt( yesterdayData.daily.data[0].temperatureMin );
+				weather.temp				= parseInt( forecastData.currently.temperature || 0 );
+				weather.humidity			= parseInt( yesterdayData.daily.data[0].humidity || 0 );
+				weather.yesterdayPrecip 	= parseInt( (yesterdayData.daily.data[0].precipIntensity * 24) || 0 );
+				weather.currentPrecip 		= parseInt( forecastData.currently.precipIntensity || 0 ); //need to figure out correct calc
 				weather.precip				= ( weather.currentPrecip > 0 ? weather.currentPrecip : 0) + ( weather.yesterdayPrecip > 0 ? weather.yesterdayPrecip : 0);
-				weather.wind				= forecastData.currently.windSpeed || 0;
+				weather.solar				= parseInt( forecastData.currently.UV );
+				weather.wind				= parseInt( yesterdayData.daily.data[0].windSpeed || 0 );
+				//Still to find the current precip value??
 
 				callback ( weather );
 			} );
@@ -288,6 +292,7 @@ exports.getWeather = function( req, res ) {
 		adjustmentOptions		= req.query.wto,
 		location				= req.query.loc,
 		weatherUndergroundKey	= req.query.key,
+		darkSkyKey				= req.query.dskey,
 		outputFormat			= req.query.format,
 		remoteAddress			= req.headers[ "x-forwarded-for" ] || req.connection.remoteAddress,
 
@@ -393,9 +398,16 @@ exports.getWeather = function( req, res ) {
 		location = location.split( "," );
 		location = [ parseFloat( location[ 0 ] ), parseFloat( location[ 1 ] ) ];
 
-		// Continue with the weather request
-		//getOWMWeatherData( location, finishRequest );
-		getDarkSkyData( location, "936fbffed9e46f1c3689b0e2c0a2c717", finishRequest );
+		// Provide support for Dark Sky weather data
+		if ( darkSkyKey ) {	
+			
+			getDarkSkyData( location, darkSkyKey, finishRequest );
+			
+		} else {
+			
+			// Continue with the weather request
+			getOWMWeatherData( location, finishRequest );
+		}
 	} else {
 
 		// Attempt to resolve provided location to GPS coordinates when it does not match
