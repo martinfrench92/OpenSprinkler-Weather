@@ -83,50 +83,64 @@ function getWeatherUndergroundData( location, weatherUndergroundKey, callback ) 
 function getDarkSkyData( location, darkSkyKey, callback ) {
 
 	// Generate URL for Dark Sky Time Machine Request to get conditions yesterday and use forecast request for current conditions
-	var forecastURL = "https://api.darksky.net/forecast/" + darkSkyKey + "/" +  location[ 0 ] + "," + location[ 1 ] + "?exclude=hourly,daily,flags";
+	var forecastURL = "https://api.darksky.net/forecast/" + darkSkyKey + "/" +  location[ 0 ] + "," + location[ 1 ] + "?exclude=hourly,flags";
 
-	getTimeData( location, function( weather ) {
-		// Perform the HTTPs request to retrieve the time machine data for yesterday readings
-		httpsRequest( forecastURL, function( forecastData ) {
+	// Perform the HTTPs request to retrieve the time machine data for yesterday readings
+	httpsRequest( forecastURL, function( forecastData ) {
+		try {
+			forecastData = JSON.parse( forecastData );
+		} catch ( err ) {
+			
+			// Otherwise indicate the request failed
+			callback( false );
+			return;
+		}
+		
+		// Generate URL for Dark Sky Time Machine request to get condition yesterday
+		//		Use the time from current reading timestamp less 86400 (24hr in secs)
+		var yesterdayURL = "https://api.darksky.net/forecast/" + darkSkyKey + "/" +  location[ 0 ] + "," + location[ 1 ] + "," +
+						( ( forecastData.daily.data[0].time - 86400 ) || 0 ) + "?exclude=currently,flags";
+		
+		httpsRequest( yesterdayURL, function( yesterdayData) {
 			try {
-				forecastData = JSON.parse( forecastData );
+				yesterdayData = JSON.parse( yesterdayData );
 			} catch ( err ) {
-				
+
 				// Otherwise indicate the request failed
 				callback( false );
-				return;
+				return;			
 			}
 			
-			// Generate URL for Dark Sky Time Machine request to get condition yesterday
-			//		Use the time from current reading timestamp less 86400 (24hr in secs) to get yesterdays results relative to current
-			var yesterdayURL = "https://api.darksky.net/forecast/" + darkSkyKey + "/" +  location[ 0 ] + "," + location[ 1 ] + "," +
-							((forecastData.currently.time - 86400) || 0 ) + "?exclude=currently,hourly,flags";
+			const maxCount = 24;
 			
-			httpsRequest( yesterdayURL, function( yesterdayData) {
-				try {
-					yesterdayData = JSON.parse( yesterdayData );
-				} catch ( err ) {
-
-					// Otherwise indicate the request failed
-					callback( false );
-					return;			
-				}
-				
-				//Map data from yesterday and current (forecast) data queries including default values
-				weather.icon				= forecastData.currently.icon || "clear-day";
-				weather.maxTemp             = parseInt( yesterdayData.daily.data[0].temperatureMax );
-				weather.minTemp             = parseInt( yesterdayData.daily.data[0].temperatureMin );
-				weather.temp				= parseInt( forecastData.currently.temperature || 0 );
-				weather.humidity			= parseInt( yesterdayData.daily.data[0].humidity || 0 );
-				weather.yesterdayPrecip 	= parseInt( (yesterdayData.daily.data[0].precipIntensity * 24) || 0 );
-				weather.currentPrecip 		= parseInt( forecastData.currently.precipIntensity || 0 ); //need to figure out correct calc
-				weather.precip				= ( weather.currentPrecip > 0 ? weather.currentPrecip : 0) + ( weather.yesterdayPrecip > 0 ? weather.yesterdayPrecip : 0);
-				weather.solar				= parseInt( forecastData.currently.UV );
-				weather.wind				= parseInt( yesterdayData.daily.data[0].windSpeed || 0 );
-				//Still to find the current precip value??
-
-				callback ( weather );
-			} );
+			var currentPrecip = parseFloat( forecastData.currently.precipIntensity ), //need to validate
+				yesterdayPrecip = 0,
+				weather;
+			
+			for ( var index = 0; index < maxCount; index++ ) {
+				yesterdayPrecip += parseFloat( yesterdayData.hourly.data[index].precipIntensity * yesterdayData.hourly.data[index].precipProbability );
+			}
+			
+			weather = {
+				icon:				forecastData.currently.icon || "clear-day",
+				timezone:			parseInt( forecastData.offset ) * 60, //NB: offset is deprecated, need to convert or use calculation
+				sunrise:			parseInt( ( forecastData.daily.data[0].sunriseTime - forecastData.daily.data[0].time ) / 60 ),
+				sunset:				parseInt( ( forecastData.daily.data[0].sunsetTime - forecastData.daily.data[0].time ) / 60 ),
+				maxTemp:			parseInt( yesterdayData.daily.data[0].temperatureMax ),
+				minTemp:			parseInt( yesterdayData.daily.data[0].temperatureMin ),
+				temp:				parseInt( forecastData.currently.temperature ),
+				humidity:			parseInt( yesterdayData.daily.data[0].humidity ),
+				yesterdayPrecip:	yesterdayPrecip,
+				currentPrecip:		currentPrecip,
+				forecastPrecip:     parseFloat( forecastData.daily.data[0].precipIntensity ) * 24,
+				precip:				( currentPrecip > 0 ? currentPrecip : 0) + ( yesterdayPrecip > 0 ? yesterdayPrecip : 0),
+				solar:				parseInt( forecastData.currently.uvIndex ),
+				wind:				parseInt( yesterdayData.daily.data[0].windSpeed )
+			};
+console.log( weather );
+console.log( yesterdayURL );
+console.log( forecastURL );
+			callback ( weather );
 		} );
 	} );
 }
