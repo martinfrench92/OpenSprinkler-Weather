@@ -96,52 +96,74 @@ function getDarkSkyData( location, darkSkyKey, callback ) {
 			return;
 		}
 		
-		// Generate URL for Dark Sky Time Machine request to get condition yesterday
-		//		Use the time from current reading timestamp less 86400 (24hr in secs)
-		var yesterdayURL = "https://api.darksky.net/forecast/" + darkSkyKey + "/" +  location[ 0 ] + "," + location[ 1 ] + "," +
-						( ( forecastData.daily.data[0].time - 86400 ) || 0 ) + "?exclude=currently,flags";
+		// Generate URL for Dark Sky Time machine request to get conditions for today
+		var todayURL = "https://api.darksky.net/forecast/" + darkSkyKey + "/" +  location[ 0 ] + "," + location[ 1 ] + "," +
+						( ( forecastData.daily.data[0].time) || 0 ) + "?exclude=currently,daily,flags";
 		
-		httpsRequest( yesterdayURL, function( yesterdayData) {
+		httpsRequest( todayURL, function( todayData) {
 			try {
-				yesterdayData = JSON.parse( yesterdayData );
+				todayData = JSON.parse( todayData );
 			} catch ( err ) {
 
 				// Otherwise indicate the request failed
 				callback( false );
-				return;			
+				return;
 			}
 			
-			const maxCount = 24;
+			// Generate URL for Dark Sky Time Machine request to get conditions yesterday
+			//		Use the time from current reading timestamp less 86400 (24hr in secs)
+			var yesterdayURL = "https://api.darksky.net/forecast/" + darkSkyKey + "/" +  location[ 0 ] + "," + location[ 1 ] + "," +
+							( ( forecastData.daily.data[0].time - 86400 ) || 0 ) + "?exclude=currently,flags";
 			
-			var currentPrecip = parseFloat( forecastData.currently.precipIntensity ), //need to validate
-				yesterdayPrecip = 0,
-				weather;
-			
-			for ( var index = 0; index < maxCount; index++ ) {
-				yesterdayPrecip += parseFloat( yesterdayData.hourly.data[index].precipIntensity * yesterdayData.hourly.data[index].precipProbability );
-			}
-			
-			weather = {
-				icon:				forecastData.currently.icon || "clear-day",
-				timezone:			parseInt( forecastData.offset ) * 60, //NB: offset is deprecated, need to convert or use calculation
-				sunrise:			parseInt( ( forecastData.daily.data[0].sunriseTime - forecastData.daily.data[0].time ) / 60 ),
-				sunset:				parseInt( ( forecastData.daily.data[0].sunsetTime - forecastData.daily.data[0].time ) / 60 ),
-				maxTemp:			parseInt( yesterdayData.daily.data[0].temperatureMax ),
-				minTemp:			parseInt( yesterdayData.daily.data[0].temperatureMin ),
-				temp:				parseInt( forecastData.currently.temperature ),
-				humidity:			parseInt( yesterdayData.daily.data[0].humidity ),
-				yesterdayPrecip:	yesterdayPrecip,
-				currentPrecip:		currentPrecip,
-				forecastPrecip:     parseFloat( forecastData.daily.data[0].precipIntensity ) * 24,
-				precip:				( currentPrecip > 0 ? currentPrecip : 0) + ( yesterdayPrecip > 0 ? yesterdayPrecip : 0),
-				solar:				parseInt( forecastData.currently.uvIndex ),
-				wind:				parseInt( yesterdayData.daily.data[0].windSpeed )
-			};
-console.log( weather );
-console.log( yesterdayURL );
-console.log( forecastURL );
-			callback ( weather );
-		} );
+			httpsRequest( yesterdayURL, function( yesterdayData) {
+				try {
+					yesterdayData = JSON.parse( yesterdayData );
+				} catch ( err ) {
+
+					// Otherwise indicate the request failed
+					callback( false );
+					return;
+				}
+				
+				const maxCount = 24;
+				
+				var currentPrecip = 0,
+					yesterdayPrecip = 0,
+					weather;
+				
+				for ( var index = 0; index < maxCount; index++ ) {
+					
+					// Only use current day rainfall data for the hourly readings prior to the current hour
+					if ( todayData.hourly.data[index].time <= ( forecastData.currently.time - 3600 ) ) {
+						currentPrecip += parseFloat( todayData.hourly.data[index].precipIntensity * todayData.hourly.data[index].precipProbability );
+					}
+					
+				}
+				
+				for ( var index = 0; index < maxCount; index++ ) {
+					yesterdayPrecip += parseFloat( yesterdayData.hourly.data[index].precipIntensity * yesterdayData.hourly.data[index].precipProbability );
+				}
+				
+				weather = {
+					icon:				forecastData.currently.icon || "clear-day",
+					timezone:			parseInt( forecastData.offset ) * 60,
+					sunrise:			parseInt( ( forecastData.daily.data[0].sunriseTime - forecastData.daily.data[0].time ) / 60 ),
+					sunset:				parseInt( ( forecastData.daily.data[0].sunsetTime - forecastData.daily.data[0].time ) / 60 ),
+					maxTemp:			parseInt( yesterdayData.daily.data[0].temperatureHigh ), //Takes logic of high during the day,
+					minTemp:			parseInt( yesterdayData.daily.data[0].temperatureLow ),  //low during the night based on DN logic
+					temp:				parseInt( forecastData.currently.temperature ),
+					humidity:			parseFloat( yesterdayData.daily.data[0].humidity ) * 100,
+					yesterdayPrecip:	yesterdayPrecip,
+					currentPrecip:		currentPrecip,
+					forecastPrecip:		parseFloat( forecastData.daily.data[0].precipIntensity ) * 24,
+					precip:				( currentPrecip > 0 ? currentPrecip : 0) + ( yesterdayPrecip > 0 ? yesterdayPrecip : 0),
+					solar:				parseInt( forecastData.currently.uvIndex ),
+					wind:				parseInt( yesterdayData.daily.data[0].windSpeed )
+				};
+
+				callback ( weather );
+			} );
+			} );
 	} );
 }
 
