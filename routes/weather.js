@@ -163,7 +163,7 @@ function getDarkSkyData( location, darkSkyKey, callback ) {
 
 				callback ( weather );
 			} );
-			} );
+		} );
 	} );
 }
 
