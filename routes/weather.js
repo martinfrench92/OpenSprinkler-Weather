@@ -135,13 +135,13 @@ function getDarkSkyData( location, darkSkyKey, callback ) {
 					
 					// Only use current day rainfall data for the hourly readings prior to the current hour
 					if ( todayData.hourly.data[index].time <= ( forecastData.currently.time - 3600 ) ) {
-						currentPrecip += parseFloat( todayData.hourly.data[index].precipIntensity * todayData.hourly.data[index].precipProbability );
+						currentPrecip += parseFloat( todayData.hourly.data[index].precipIntensity );
 					}
 					
 				}
 				
 				for ( var index = 0; index < maxCount; index++ ) {
-					yesterdayPrecip += parseFloat( yesterdayData.hourly.data[index].precipIntensity * yesterdayData.hourly.data[index].precipProbability );
+					yesterdayPrecip += parseFloat( yesterdayData.hourly.data[index].precipIntensity );
 				}
 				
 				weather = {
