@@ -376,7 +376,7 @@ exports.getWeather = function( req, res ) {
 					sunset:		weather.sunset,
 					eip:		ipToInt( remoteAddress )
 				};
-
+			
 			// Return the response to the client in the requested format
 			if ( outputFormat === "json" ) {
 				res.json( data );
