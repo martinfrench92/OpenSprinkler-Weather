@@ -100,6 +100,8 @@ function getDarkSkyData( location, darkSkyKey, callback ) {
 		var todayURL = "https://api.darksky.net/forecast/" + darkSkyKey + "/" +  location[ 0 ] + "," + location[ 1 ] + "," +
 						( ( forecastData.daily.data[0].time) || 0 ) + "?exclude=currently,daily,flags";
 		
+		console.log(todayURL);
+		
 		httpsRequest( todayURL, function( todayData) {
 			try {
 				todayData = JSON.parse( todayData );
@@ -114,6 +116,8 @@ function getDarkSkyData( location, darkSkyKey, callback ) {
 			//		Use the time from current reading timestamp less 86400 (24hr in secs)
 			var yesterdayURL = "https://api.darksky.net/forecast/" + darkSkyKey + "/" +  location[ 0 ] + "," + location[ 1 ] + "," +
 							( ( forecastData.daily.data[0].time - 86400 ) || 0 ) + "?exclude=currently,flags";
+			
+			console.log(yesterdayURL);
 			
 			httpsRequest( yesterdayURL, function( yesterdayData) {
 				try {
