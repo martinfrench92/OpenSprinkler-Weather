@@ -274,7 +274,9 @@ function calculateWeatherScale( adjustmentMethod, adjustmentOptions, weather ) {
 				precipFactor = precipFactor * ( adjustmentOptions.r / 100 );
 			}
 		}
-
+		
+		console.log(`humidityFactor = ${humidityFactor} | tempFactor = ${tempFactor} | precipFactor = ${precipFactor}`);
+		
 		// Apply all of the weather modifying factors and clamp the result between 0 and 200%.
 		return parseInt( Math.min( Math.max( 0, 100 + humidityFactor + tempFactor + precipFactor ), 200 ) );
 	}
