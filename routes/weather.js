@@ -259,6 +259,8 @@ function calculateWeatherScale( adjustmentMethod, adjustmentOptions, weather ) {
 			humidityFactor = ( humidityBase - weather.humidity ),
 			tempFactor = ( ( temp - tempBase ) * 4 ),
 			precipFactor = ( ( precipBase - weather.precip ) * 200 );
+		
+		console.log(`humidity = ${weather.humidity} | temp = ${temp} | precip = ${weather.precip}`);
 
 		// Apply adjustment options, if provided, by multiplying the percentage against the factor
 		if ( adjustmentOptions ) {
