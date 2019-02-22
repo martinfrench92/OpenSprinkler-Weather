@@ -1,4 +1,5 @@
 var http		= require( "http" ),
+	https		= require( "https" ),
 	SunCalc		= require( "suncalc" ),
 	moment		= require( "moment-timezone" ),
 	geoTZ	 	= require( "geo-tz" ),
@@ -76,6 +77,100 @@ function getWeatherUndergroundData( location, weatherUndergroundKey, callback ) 
 		}
 	} );
 }
+
+
+// Retrieve weather data from Dark Sky
+function getDarkSkyData( location, darkSkyKey, callback ) {
+
+	// Generate URL for Dark Sky Time Machine Request to get conditions yesterday and use forecast request for current conditions
+	var forecastURL = "https://api.darksky.net/forecast/" + darkSkyKey + "/" +  location[ 0 ] + "," + location[ 1 ] + "?exclude=hourly,flags";
+
+	// Perform the HTTPs request to retrieve the time machine data for yesterday readings
+	httpsRequest( forecastURL, function( forecastData ) {
+		try {
+			forecastData = JSON.parse( forecastData );
+		} catch ( err ) {
+			
+			// Otherwise indicate the request failed
+			callback( false );
+			return;
+		}
+		
+		// Generate URL for Dark Sky Time machine request to get conditions for today
+		var todayURL = "https://api.darksky.net/forecast/" + darkSkyKey + "/" +  location[ 0 ] + "," + location[ 1 ] + "," +
+						( ( forecastData.daily.data[0].time) || 0 ) + "?exclude=currently,daily,flags";
+		
+		console.log(todayURL);
+		
+		httpsRequest( todayURL, function( todayData) {
+			try {
+				todayData = JSON.parse( todayData );
+			} catch ( err ) {
+
+				// Otherwise indicate the request failed
+				callback( false );
+				return;
+			}
+			
+			// Generate URL for Dark Sky Time Machine request to get conditions yesterday
+			//		Use the time from current reading timestamp less 86400 (24hr in secs)
+			var yesterdayURL = "https://api.darksky.net/forecast/" + darkSkyKey + "/" +  location[ 0 ] + "," + location[ 1 ] + "," +
+							( ( forecastData.daily.data[0].time - 86400 ) || 0 ) + "?exclude=currently,flags";
+			
+			console.log(yesterdayURL);
+			
+			httpsRequest( yesterdayURL, function( yesterdayData) {
+				try {
+					yesterdayData = JSON.parse( yesterdayData );
+				} catch ( err ) {
+
+					// Otherwise indicate the request failed
+					callback( false );
+					return;
+				}
+				
+				const maxCount = 24;
+				
+				var currentPrecip = 0,
+					yesterdayPrecip = 0,
+					weather;
+				
+				for ( var index = 0; index < maxCount; index++ ) {
+					
+					// Only use current day rainfall data for the hourly readings prior to the current hour
+					if ( todayData.hourly.data[index].time <= ( forecastData.currently.time - 3600 ) ) {
+						currentPrecip += parseFloat( todayData.hourly.data[index].precipIntensity );
+					}
+					
+				}
+				
+				for ( var index = 0; index < maxCount; index++ ) {
+					yesterdayPrecip += parseFloat( yesterdayData.hourly.data[index].precipIntensity );
+				}
+				
+				weather = {
+					icon:				forecastData.currently.icon || "clear-day",
+					timezone:			parseInt( forecastData.offset ) * 60,
+					sunrise:			parseInt( ( forecastData.daily.data[0].sunriseTime - forecastData.daily.data[0].time ) / 60 ),
+					sunset:				parseInt( ( forecastData.daily.data[0].sunsetTime - forecastData.daily.data[0].time ) / 60 ),
+					maxTemp:			parseInt( yesterdayData.daily.data[0].temperatureHigh ), //Takes logic of high during the day,
+					minTemp:			parseInt( yesterdayData.daily.data[0].temperatureLow ),  //low during the night based on DN logic
+					temp:				parseInt( forecastData.currently.temperature ),
+					humidity:			parseFloat( yesterdayData.daily.data[0].humidity ) * 100,
+					yesterdayPrecip:	yesterdayPrecip,
+					currentPrecip:		currentPrecip,
+					forecastPrecip:		parseFloat( forecastData.daily.data[0].precipIntensity ) * 24,
+					precip:				( currentPrecip > 0 ? currentPrecip : 0) + ( yesterdayPrecip > 0 ? yesterdayPrecip : 0),
+					solar:				parseInt( forecastData.currently.uvIndex ),
+					wind:				parseInt( yesterdayData.daily.data[0].windSpeed )
+				};
+
+				callback ( weather );
+			} );
+		} );
+	} );
+}
+
 
 // Retrieve weather data from Open Weather Map
 function getOWMWeatherData( location, callback ) {
@@ -164,6 +259,8 @@ function calculateWeatherScale( adjustmentMethod, adjustmentOptions, weather ) {
 			humidityFactor = ( humidityBase - weather.humidity ),
 			tempFactor = ( ( temp - tempBase ) * 4 ),
 			precipFactor = ( ( precipBase - weather.precip ) * 200 );
+		
+		console.log(`humidity = ${weather.humidity} | temp = ${temp} | precip = ${weather.precip}`);
 
 		// Apply adjustment options, if provided, by multiplying the percentage against the factor
 		if ( adjustmentOptions ) {
@@ -179,7 +276,9 @@ function calculateWeatherScale( adjustmentMethod, adjustmentOptions, weather ) {
 				precipFactor = precipFactor * ( adjustmentOptions.r / 100 );
 			}
 		}
-
+		
+		console.log(`humidityFactor = ${humidityFactor} | tempFactor = ${tempFactor} | precipFactor = ${precipFactor}`);
+		
 		// Apply all of the weather modifying factors and clamp the result between 0 and 200%.
 		return parseInt( Math.min( Math.max( 0, 100 + humidityFactor + tempFactor + precipFactor ), 200 ) );
 	}
@@ -237,6 +336,7 @@ exports.getWeather = function( req, res ) {
 		adjustmentOptions		= req.query.wto,
 		location				= req.query.loc,
 		weatherUndergroundKey	= req.query.key,
+		darkSkyKey				= req.query.dskey,
 		outputFormat			= req.query.format,
 		remoteAddress			= req.headers[ "x-forwarded-for" ] || req.connection.remoteAddress,
 
@@ -284,7 +384,7 @@ exports.getWeather = function( req, res ) {
 					sunset:		weather.sunset,
 					eip:		ipToInt( remoteAddress )
 				};
-
+			
 			// Return the response to the client in the requested format
 			if ( outputFormat === "json" ) {
 				res.json( data );
@@ -342,8 +442,16 @@ exports.getWeather = function( req, res ) {
 		location = location.split( "," );
 		location = [ parseFloat( location[ 0 ] ), parseFloat( location[ 1 ] ) ];
 
-		// Continue with the weather request
-		getOWMWeatherData( location, finishRequest );
+		// Provide support for Dark Sky weather data
+		if ( darkSkyKey ) {	
+			
+			getDarkSkyData( location, darkSkyKey, finishRequest );
+			
+		} else {
+			
+			// Continue with the weather request
+			getOWMWeatherData( location, finishRequest );
+		}
 	} else {
 
 		// Attempt to resolve provided location to GPS coordinates when it does not match
@@ -373,6 +481,38 @@ function httpRequest( url, callback ) {
 
 	http.get( options, function( response ) {
         var data = "";
+
+        // Reassemble the data as it comes in
+        response.on( "data", function( chunk ) {
+            data += chunk;
+        } );
+
+        // Once the data is completely received, return it to the callback
+        response.on( "end", function() {
+            callback( data );
+        } );
+	} ).on( "error", function() {
+
+		// If the HTTP request fails, return false
+		callback( false );
+	} );
+}
+
+// Generic HTTPs request handler that parses the URL and uses the
+// native Node.js http module to perform the request
+function httpsRequest( url, callback ) {
+	url = url.match( filters.url );
+
+	var options = {
+		host: url[ 1 ],
+		port: url[ 2 ] || 443,
+		path: url[ 3 ]
+	};
+
+	https.get( options, function( response ) {
+        var data = "";
+
+		response.setEncoding( 'utf8' );
 
         // Reassemble the data as it comes in
         response.on( "data", function( chunk ) {
