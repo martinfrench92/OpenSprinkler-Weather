@@ -236,6 +236,19 @@ function getTimeData( location, callback ) {
 	} );
 }
 
+
+function farenheitToCelsius(farenheitTemp) {
+	
+	// Formula for calculating F to C - (°F − 32) × 5/9 = °C
+	if (!isNan(farenheitTemp)) {
+		return ((farenheitTemp - 32) * 5/9)
+	}
+	else {
+		return 0;
+	}
+	
+}
+
 // Calculates the resulting water scale using the provided weather data, adjustment method and options
 function calculateWeatherScale( adjustmentMethod, adjustmentOptions, weather ) {
 
@@ -260,7 +273,7 @@ function calculateWeatherScale( adjustmentMethod, adjustmentOptions, weather ) {
 			tempFactor = ( ( temp - tempBase ) * 4 ),
 			precipFactor = ( ( precipBase - weather.precip ) * 200 );
 		
-		console.log(`humidity = ${weather.humidity} | temp = ${temp} | temp min/max = ${weather.maxTemp} / ${weather.minTemp} | precip = ${weather.precip}`);
+		console.log(`humidity = ${weather.humidity} | temp (C) = ${farenheitToCelsius(temp)} | temp min/max (C) = ${farenheitToCelsius(weather.maxTemp)} / ${farenheitToCelsius(weather.minTemp)} | precip = ${weather.precip}`);
 
 		// Apply adjustment options, if provided, by multiplying the percentage against the factor
 		if ( adjustmentOptions ) {
