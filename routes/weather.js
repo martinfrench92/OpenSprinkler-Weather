@@ -240,7 +240,7 @@ function getTimeData( location, callback ) {
 function farenheitToCelsius(farenheitTemp) {
 	
 	// Formula for calculating F to C - (°F − 32) × 5/9 = °C
-	if (!isNan(farenheitTemp)) {
+	if (!isNaN(farenheitTemp)) {
 		return ((farenheitTemp - 32) * 5/9)
 	}
 	else {
