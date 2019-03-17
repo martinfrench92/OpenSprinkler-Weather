@@ -175,17 +175,27 @@ function getDarkSkyData( location, darkSkyKey, callback ) {
 
 						}
 
+						// Add the previous 3 days precipitaion
 						for ( var index = 0; index < maxCount; index++ ) {
 							yesterdayPrecip += parseFloat( yesterdayData.hourly.data[index].precipIntensity );
 						}
+						for ( var index = 0; index < maxCount; index++ ) {
+							yesterdayPrecip += parseFloat( oneBeforeYesterdayData.hourly.data[index].precipIntensity );
+						}
+						for ( var index = 0; index < maxCount; index++ ) {
+							yesterdayPrecip += parseFloat( twoBeforeYesterdayData.hourly.data[index].precipIntensity );
+						}
 
-						// Calculate 3 day average min and max temps
+						// Calculate 3 day average min and max temps & humidity
 						var aveMaxTemp = (parseInt(yesterdayData.daily.data[0].temperatureHigh) +
 															parseInt(oneBeforeYesterdayData.daily.data[0].temperatureHigh) +
 															parseInt(twoBeforeYesterdayData.daily.data[0].temperatureHigh)) / 3;
 						var aveMinTemp = (parseInt(yesterdayData.daily.data[0].temperatureLow) +
 															parseInt(oneBeforeYesterdayData.daily.data[0].temperatureLow) +
 															parseInt(twoBeforeYesterdayData.daily.data[0].temperatureLow)) / 3;
+						var aveHumidity = (parseFloat(yesterdayData.daily.data[0].humidity) +
+															 parseFloat(oneBeforeYesterdayData.daily.data[0].humidity) +
+															 parseFloat(twoBeforeYesterdayData.daily.data[0].humidity)) / 3;
 
 						weather = {
 							icon:				forecastData.currently.icon || "clear-day",
@@ -195,7 +205,7 @@ function getDarkSkyData( location, darkSkyKey, callback ) {
 							maxTemp:			aveMaxTemp,
 							minTemp:			aveMinTemp,
 							temp:				parseInt( forecastData.currently.temperature ),
-							humidity:			parseFloat( yesterdayData.daily.data[0].humidity ) * 100,
+							humidity:			aveHumidity * 100,
 							yesterdayPrecip:	yesterdayPrecip,
 							currentPrecip:		currentPrecip,
 							forecastPrecip:		parseFloat( forecastData.daily.data[0].precipIntensity ) * 24,
