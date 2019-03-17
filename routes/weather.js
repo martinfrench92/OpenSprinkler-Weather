@@ -324,7 +324,7 @@ function calculateWeatherScale( adjustmentMethod, adjustmentOptions, weather ) {
 			tempFactor = ( ( temp - tempBase ) * 4 ),
 			precipFactor = ( ( precipBase - weather.precip ) * 200 );
 
-		console.log(`humidity = ${weather.humidity} | temp (C) = ${farenheitToCelsius(temp)} | temp min/max (C) = ${farenheitToCelsius(weather.maxTemp)} / ${farenheitToCelsius(weather.minTemp)} | precip = ${weather.precip}`);
+		console.log(`humidity = ${weather.humidity} | temp (C) = ${farenheitToCelsius(temp)} | temp min/max (C) = ${farenheitToCelsius(weather.maxTemp)} / ${farenheitToCelsius(weather.minTemp)} | precip = ${weather.precip * 25.4}`);
 
 		// Apply adjustment options, if provided, by multiplying the percentage against the factor
 		if ( adjustmentOptions ) {
