@@ -90,18 +90,18 @@ function getDarkSkyData( location, darkSkyKey, callback ) {
 		try {
 			forecastData = JSON.parse( forecastData );
 		} catch ( err ) {
-			
+
 			// Otherwise indicate the request failed
 			callback( false );
 			return;
 		}
-		
+
 		// Generate URL for Dark Sky Time machine request to get conditions for today
 		var todayURL = "https://api.darksky.net/forecast/" + darkSkyKey + "/" +  location[ 0 ] + "," + location[ 1 ] + "," +
 						( ( forecastData.daily.data[0].time) || 0 ) + "?exclude=currently,daily,flags";
-		
+
 		console.log(todayURL);
-		
+
 		httpsRequest( todayURL, function( todayData) {
 			try {
 				todayData = JSON.parse( todayData );
@@ -111,14 +111,13 @@ function getDarkSkyData( location, darkSkyKey, callback ) {
 				callback( false );
 				return;
 			}
-			
+
 			// Generate URL for Dark Sky Time Machine request to get conditions yesterday
-			//		Use the time from current reading timestamp less 86400 (24hr in secs)
+			//		Use the time from current reading timestamp less 1 x 24hr in secs
 			var yesterdayURL = "https://api.darksky.net/forecast/" + darkSkyKey + "/" +  location[ 0 ] + "," + location[ 1 ] + "," +
-							( ( forecastData.daily.data[0].time - 86400 ) || 0 ) + "?exclude=currently,flags";
-			
+							( ( forecastData.daily.data[0].time - 1*24*60*60 ) || 0 ) + "?exclude=currently,flags";
 			console.log(yesterdayURL);
-			
+
 			httpsRequest( yesterdayURL, function( yesterdayData) {
 				try {
 					yesterdayData = JSON.parse( yesterdayData );
@@ -128,44 +127,96 @@ function getDarkSkyData( location, darkSkyKey, callback ) {
 					callback( false );
 					return;
 				}
-				
-				const maxCount = 24;
-				
-				var currentPrecip = 0,
-					yesterdayPrecip = 0,
-					weather;
-				
-				for ( var index = 0; index < maxCount; index++ ) {
-					
-					// Only use current day rainfall data for the hourly readings prior to the current hour
-					if ( todayData.hourly.data[index].time <= ( forecastData.currently.time - 3600 ) ) {
-						currentPrecip += parseFloat( todayData.hourly.data[index].precipIntensity );
-					}
-					
-				}
-				
-				for ( var index = 0; index < maxCount; index++ ) {
-					yesterdayPrecip += parseFloat( yesterdayData.hourly.data[index].precipIntensity );
-				}
-				
-				weather = {
-					icon:				forecastData.currently.icon || "clear-day",
-					timezone:			parseInt( forecastData.offset ) * 60,
-					sunrise:			parseInt( ( forecastData.daily.data[0].sunriseTime - forecastData.daily.data[0].time ) / 60 ),
-					sunset:				parseInt( ( forecastData.daily.data[0].sunsetTime - forecastData.daily.data[0].time ) / 60 ),
-					maxTemp:			parseInt( yesterdayData.daily.data[0].temperatureHigh ), //Takes logic of high during the day,
-					minTemp:			parseInt( yesterdayData.daily.data[0].temperatureLow ),  //low during the night based on DN logic
-					temp:				parseInt( forecastData.currently.temperature ),
-					humidity:			parseFloat( yesterdayData.daily.data[0].humidity ) * 100,
-					yesterdayPrecip:	yesterdayPrecip,
-					currentPrecip:		currentPrecip,
-					forecastPrecip:		parseFloat( forecastData.daily.data[0].precipIntensity ) * 24,
-					precip:				( currentPrecip > 0 ? currentPrecip : 0) + ( yesterdayPrecip > 0 ? yesterdayPrecip : 0),
-					solar:				parseInt( forecastData.currently.uvIndex ),
-					wind:				parseInt( yesterdayData.daily.data[0].windSpeed )
-				};
 
-				callback ( weather );
+				// Generate URL for Dark Sky Time Machine request to get conditions day before yesterday
+				//		Use the time from current reading timestamp less 2 x 24hr in secs
+				var oneBeforeYesterdayURL = "https://api.darksky.net/forecast/" + darkSkyKey + "/" +  location[ 0 ] + "," + location[ 1 ] + "," +
+								( ( forecastData.daily.data[0].time - 2*24*60*60 ) || 0 ) + "?exclude=currently,flags";
+				console.log(oneBeforeYesterdayURL);
+
+				httpsRequest(oneBeforeYesterdayURL, function(oneBeforeYesterdayData) {
+					try {
+						oneBeforeYesterdayData = JSON.parse( oneBeforeYesterdayData );
+					} catch ( err ) {
+
+						// Otherwise indicate the request failed
+						callback( false );
+						return;
+					}
+
+					// Generate URL for Dark Sky Time Machine request to get conditions 2 days before yesterday
+					//		Use the time from current reading timestamp less 3 x 24hr in secs
+					var twoBeforeYesterdayURL = "https://api.darksky.net/forecast/" + darkSkyKey + "/" +  location[ 0 ] + "," + location[ 1 ] + "," +
+									( ( forecastData.daily.data[0].time - 3*24*60*60 ) || 0 ) + "?exclude=currently,flags";
+					console.log(twoBeforeYesterdayURL);
+
+					httpsRequest(twoBeforeYesterdayURL, function(twoBeforeYesterdayData) {
+						try {
+							twoBeforeYesterdayData = JSON.parse( twoBeforeYesterdayData );
+						} catch ( err ) {
+
+							// Otherwise indicate the request failed
+							callback( false );
+							return;
+						}
+
+						const maxCount = 24;
+
+						var currentPrecip = 0,
+							yesterdayPrecip = 0,
+							weather;
+
+						for ( var index = 0; index < maxCount; index++ ) {
+
+							// Only use current day rainfall data for the hourly readings prior to the current hour
+							if ( todayData.hourly.data[index].time <= ( forecastData.currently.time - 3600 ) ) {
+								currentPrecip += parseFloat( todayData.hourly.data[index].precipIntensity );
+							}
+
+						}
+
+						// Add the previous 3 days precipitaion
+						for ( var index = 0; index < maxCount; index++ ) {
+							yesterdayPrecip += parseFloat( yesterdayData.hourly.data[index].precipIntensity );
+						}
+						for ( var index = 0; index < maxCount; index++ ) {
+							yesterdayPrecip += parseFloat( oneBeforeYesterdayData.hourly.data[index].precipIntensity );
+						}
+						for ( var index = 0; index < maxCount; index++ ) {
+							yesterdayPrecip += parseFloat( twoBeforeYesterdayData.hourly.data[index].precipIntensity );
+						}
+
+						// Calculate 3 day average min and max temps & humidity
+						var aveMaxTemp = (parseInt(yesterdayData.daily.data[0].temperatureHigh) +
+															parseInt(oneBeforeYesterdayData.daily.data[0].temperatureHigh) +
+															parseInt(twoBeforeYesterdayData.daily.data[0].temperatureHigh)) / 3;
+						var aveMinTemp = (parseInt(yesterdayData.daily.data[0].temperatureLow) +
+															parseInt(oneBeforeYesterdayData.daily.data[0].temperatureLow) +
+															parseInt(twoBeforeYesterdayData.daily.data[0].temperatureLow)) / 3;
+						var aveHumidity = (parseFloat(yesterdayData.daily.data[0].humidity) +
+															 parseFloat(oneBeforeYesterdayData.daily.data[0].humidity) +
+															 parseFloat(twoBeforeYesterdayData.daily.data[0].humidity)) / 3;
+
+						weather = {
+							icon:				forecastData.currently.icon || "clear-day",
+							timezone:			parseInt( forecastData.offset ) * 60,
+							sunrise:			parseInt( ( forecastData.daily.data[0].sunriseTime - forecastData.daily.data[0].time ) / 60 ),
+							sunset:				parseInt( ( forecastData.daily.data[0].sunsetTime - forecastData.daily.data[0].time ) / 60 ),
+							maxTemp:			aveMaxTemp,
+							minTemp:			aveMinTemp,
+							temp:				parseInt( forecastData.currently.temperature ),
+							humidity:			aveHumidity * 100,
+							yesterdayPrecip:	yesterdayPrecip,
+							currentPrecip:		currentPrecip,
+							forecastPrecip:		parseFloat( forecastData.daily.data[0].precipIntensity ) * 24,
+							precip:				( currentPrecip > 0 ? currentPrecip : 0) + ( yesterdayPrecip > 0 ? yesterdayPrecip : 0),
+							solar:				parseInt( forecastData.currently.uvIndex ),
+							wind:				parseInt( yesterdayData.daily.data[0].windSpeed )
+						};
+
+						callback ( weather );
+					} );
+				} );
 			} );
 		} );
 	} );
@@ -210,12 +261,12 @@ function getOWMWeatherData( location, callback ) {
 			weather.wind = weather.wind / maxCount;
 			weather.precip = weather.precip / maxCount;
 
-			
+
 			location = location.join( "," );
 
 			callback( weather );
 		} );
-	} );	
+	} );
 }
 
 // Calculate timezone and sun rise/set information
@@ -238,7 +289,7 @@ function getTimeData( location, callback ) {
 
 
 function farenheitToCelsius(farenheitTemp) {
-	
+
 	// Formula for calculating F to C - (°F − 32) × 5/9 = °C
 	if (!isNaN(farenheitTemp)) {
 		return ((farenheitTemp - 32) * 5/9)
@@ -246,7 +297,7 @@ function farenheitToCelsius(farenheitTemp) {
 	else {
 		return 0;
 	}
-	
+
 }
 
 // Calculates the resulting water scale using the provided weather data, adjustment method and options
@@ -272,8 +323,8 @@ function calculateWeatherScale( adjustmentMethod, adjustmentOptions, weather ) {
 			humidityFactor = ( humidityBase - weather.humidity ),
 			tempFactor = ( ( temp - tempBase ) * 4 ),
 			precipFactor = ( ( precipBase - weather.precip ) * 200 );
-		
-		console.log(`humidity = ${weather.humidity} | temp (C) = ${farenheitToCelsius(temp)} | temp min/max (C) = ${farenheitToCelsius(weather.maxTemp)} / ${farenheitToCelsius(weather.minTemp)} | precip = ${weather.precip}`);
+
+		console.log(`humidity (%) = ${weather.humidity} | temp (C) = ${farenheitToCelsius(temp)} | temp min/max (C) = ${farenheitToCelsius(weather.maxTemp)} / ${farenheitToCelsius(weather.minTemp)} | precip (mm) = ${weather.precip * 25.4}`);
 
 		// Apply adjustment options, if provided, by multiplying the percentage against the factor
 		if ( adjustmentOptions ) {
@@ -289,9 +340,9 @@ function calculateWeatherScale( adjustmentMethod, adjustmentOptions, weather ) {
 				precipFactor = precipFactor * ( adjustmentOptions.r / 100 );
 			}
 		}
-		
+
 		console.log(`humidityFactor = ${humidityFactor} | tempFactor = ${tempFactor} | precipFactor = ${precipFactor}`);
-		
+
 		// Apply all of the weather modifying factors and clamp the result between 0 and 200%.
 		return parseInt( Math.min( Math.max( 0, 100 + humidityFactor + tempFactor + precipFactor ), 200 ) );
 	}
@@ -397,7 +448,7 @@ exports.getWeather = function( req, res ) {
 					sunset:		weather.sunset,
 					eip:		ipToInt( remoteAddress )
 				};
-			
+
 			// Return the response to the client in the requested format
 			if ( outputFormat === "json" ) {
 				res.json( data );
@@ -456,12 +507,12 @@ exports.getWeather = function( req, res ) {
 		location = [ parseFloat( location[ 0 ] ), parseFloat( location[ 1 ] ) ];
 
 		// Provide support for Dark Sky weather data
-		if ( darkSkyKey ) {	
-			
+		if ( darkSkyKey ) {
+
 			getDarkSkyData( location, darkSkyKey, finishRequest );
-			
+
 		} else {
-			
+
 			// Continue with the weather request
 			getOWMWeatherData( location, finishRequest );
 		}
