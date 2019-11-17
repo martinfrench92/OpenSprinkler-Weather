@@ -3,8 +3,11 @@ node_modules
 .env
 coverage/*
 npm-debug.log
-
-# Elastic Beanstalk Files
-.elasticbeanstalk/*
-!.elasticbeanstalk/*.cfg.yml
-!.elasticbeanstalk/*.global.yml
+.idea
+js
+weather.zip
+baselineEToData/*.bin
+baselineEToData/*.png
+baselineEToData/*.tif
+baselineEToData/dataPreparer[.exe]
+observations.json
